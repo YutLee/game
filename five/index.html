@@ -219,7 +219,7 @@
       const y = Math.floor((event.clientY - rect.top - cellSize / 2) / cellSize);
       let winner;
 
-      if (x >= 0 && y >= 0 && x < boardSize & y < boardSize && gameBoard[y][x] === null) {
+      if (x >= 0 && y >= 0 && x < boardSize && y < boardSize && gameBoard[y][x] === null) {
         gameBoard[y][x] = currentPlayer;
         drawPiece(x, y, cellSize, currentPlayer === 'black' ? 'black' : 'white');
         // 检查是否获胜
