@@ -167,6 +167,8 @@
       black: document.getElementById('black'),
       white: document.getElementById('white')
     }
+    const audio = new Audio('https://assets.19x19.com/voice/play.wav'); // 落子声音
+    const winAudio = new Audio('https://assets.19x19.com/voice/win.wav'); // 胜利声音
     const ctx = canvas.getContext('2d');
     const mctx = mark.getContext('2d');
     const nctx = step.getContext('2d');
@@ -425,6 +427,7 @@
 
         currentPlayer = { x, y, color: currentPlayer.color, step: currentStep++ }
         gameBoard[y][x] = { color: currentPlayer.color, step: currentPlayer.step };
+        audio.play();
         drawPiece(ctx, x, y, cellSize, currentPlayer.color === 'black' ? 'black' : 'white');
 
         // 检查是否获胜
@@ -434,6 +437,7 @@
 
         if (winner) {
           gameOver = true;
+          winAudio.play();
           openDialog(winner);
           return;
         }
