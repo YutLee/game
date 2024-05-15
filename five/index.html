@@ -93,7 +93,7 @@
 
     .desc {
       max-width: 20vw;
-      min-width: 200px;
+      min-width: 258px;
       font-size: 14px;
       margin-left: 30px;
       display: flex;
@@ -110,6 +110,29 @@
 
     .rule {
       flex: 1;
+    }
+
+    
+    /* 当屏幕的宽高比小于 4/3 时应用样式 */
+    @media (max-aspect-ratio: 1) {
+      .flex {
+        flex-direction: column;
+      }
+
+      .desc {
+        flex-direction: row;
+        max-width: none;
+        min-width: none;
+        margin: 50px 0 0 0;
+      }
+
+      .desc button {
+        flex: 1;
+      }
+
+      .rule {
+        display: none;
+      }
     }
   </style>
 </head>
