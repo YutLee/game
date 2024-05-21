@@ -88,6 +88,7 @@
     let currentPlayer = 'black'; // 当前玩家
     let gameOver; // 游戏是否结束
     let gameBoard; // 游戏棋盘
+    let draw = 0; // 判断是否和棋
 
     canvas.width = max;
     canvas.height = max;
@@ -191,7 +192,7 @@
 
     // 显示获胜方
     function openDialog(winner) {
-      document.getElementById('winner').innerText = winner === 'black' ? '黑方获胜' : '白方获胜';
+      document.getElementById('winner').innerText = winner === 'black' ? '黑方获胜' : winner === 'white' ? '白方获胜' : '势均力敌';
       document.getElementById('dialog').className = 'dialog open';
     }
 
@@ -200,6 +201,7 @@
       currentPlayer = 'black';
       gameOver = false;
       gameBoard = Array(boardSize).fill().map(() => Array(boardSize).fill(null));
+      draw = 0;
       drawBoard();
     }
 
@@ -222,6 +224,7 @@
       if (x >= 0 && y >= 0 && x < boardSize && y < boardSize && gameBoard[y][x] === null) {
         gameBoard[y][x] = currentPlayer;
         drawPiece(x, y, cellSize, currentPlayer === 'black' ? 'black' : 'white');
+
         // 检查是否获胜
         winner = traverseDiagonals(gameBoard, currentPlayer, function (line, player) {
           if (checkLine(line, player)) return player
@@ -232,6 +235,14 @@
           openDialog(winner);
           return;
         }
+
+        // 检测是否和棋
+        if (++draw === boardSize * boardSize) {
+          gameOver = true;
+          openDialog();
+          return;
+        }
+
         // 切换玩家
         currentPlayer = currentPlayer === 'black' ? 'white' : 'black';
       }
