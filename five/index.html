@@ -22,11 +22,13 @@
     }
 
     #board {
+      background-color: #cdb087;
       background-image: url('https://assets.19x19.com/img/skin/board/b1.png');
       background-size: 100%;
       width: 480px;
       height: 480px;
       position: relative;
+      margin: 16px 0 0 16px;
     }
 
     #mark,
@@ -98,6 +100,7 @@
       margin-left: 30px;
       display: flex;
       flex-direction: column;
+      padding: 0 16px;
     }
 
     .desc p {
@@ -117,13 +120,13 @@
     @media (max-aspect-ratio: 1) {
       .flex {
         flex-direction: column;
+        height: auto;
       }
 
       .desc {
         flex-direction: row;
         max-width: none;
-        min-width: none;
-        margin: 50px 0 0 0;
+        margin: 40px 0 0 0;
       }
 
       .desc button {
@@ -133,6 +136,11 @@
       .rule {
         display: none;
       }
+    }
+
+    ::-webkit-scrollbar {
+      width: 0;
+      height: 0;
     }
   </style>
 </head>
@@ -174,9 +182,9 @@
   </div>
   <div id="dialog" class="dialog" onclick="this.className='dialog'">
     <div class="alert">
-      <h4 id="title">恭喜!</h4>
+      <h4 id="title"></h4>
       <p id="winner"></p>
-      <button>知道了</button>
+      <button id="reBtn" onclick="restart()">重新开始</button>
     </div>
   </div>
   <img id="black" style="display: none;" src="https://assets.19x19.com/img/skin/stone/shell_stb3.png" />
@@ -192,18 +200,20 @@
     }
     const audio = new Audio('https://assets.19x19.com/voice/play.wav'); // 落子声音
     const winAudio = new Audio('https://assets.19x19.com/voice/win.wav'); // 胜利声音
+    const rejectAudio = new Audio('https://assets.19x19.com/voice/actionReject.wav'); // 禁止声音
     const ctx = canvas.getContext('2d');
     const mctx = mark.getContext('2d');
     const nctx = step.getContext('2d');
-    const max = Math.min(window.innerWidth, window.innerHeight);
-    const cellSize = max / 16; // 每个格子的大小
     const boardSize = 15; // 棋盘的大小，15x15
+    const max = Math.min(document.documentElement.clientWidth - 32, document.documentElement.clientHeight - 32);
+    const cellSize = max / (boardSize + 1); // 每个格子的大小
     let currentPlayer = { x: 0, y: 0, step: 0, color: 'black' }; // 当前玩家
     let currentStep = 1; // 当前手数
     let gameOver; // 游戏是否结束
     let gameBoard; // 游戏棋盘
     let lastHoverPoint; // 鼠标上一次位置
     let stepShow = false; // 是否开启步数显示
+    let deuce = 0; // 判断是否和棋
 
     boardDom.style = `width: ${max}px; height: ${max}px`;
     canvas.width = max;
@@ -272,6 +282,19 @@
       ctx.fillStyle = color;
       ctx.fill();
       // ctx.stroke();
+    }
+
+    // 绘制禁手标志
+    function drawNotArrowedMark(ctx, x, y, size, color) {
+      ctx.fillStyle = 'white';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x * size + size, y * size + size, size / 2.5, 0, 2 * Math.PI);
+      ctx.moveTo((x + 0.75) * size, (y + 0.75) * size);
+      ctx.lineTo((x + 1.25) * size, (y + 1.25) * size);
+      ctx.fill();
+      ctx.stroke();
     }
 
     // 绘制棋子
@@ -367,10 +390,217 @@
       }
     }
 
+     /**
+     * 禁手的分类
+     * a.三三禁手（黑棋一子落下同时形成两个活三，此子必须为两个活三共同的构成子）；
+     * b.四四禁手（黑棋一子落下同时形成两个或两个以上的冲四或活四）；
+     * c.长连禁手（黑棋一子落下形成一个或一个以上的长连）。
+     * 构成禁手的基本子力要素
+     * a.活三（本方再走一着可以形成活四的三）；
+     * b.活四（有两个点可以成五的四）；
+     * c.冲四（只有一个点可以成五的四）；
+     * d.长连（在棋盘上的阳线和阴线任意一条线上，形成的5个以上同色棋子不间隔的相连）。
+     */
+
+    // 检查长连禁手
+    function checkLongConnect(board, x, y, player, maxCount = 5) {
+      let count = 0; // 连子计数
+
+      function checkAndReset(reset = true) {
+        if (count >= maxCount) return true
+        reset && (count = 0);
+      }
+
+      // 向上检查
+      for (let i = y - 1; i >= 0 && board[i][x]?.color === player; i--) {
+        count++;
+      }
+
+      // 向下检查
+      for (let i = y + 1; i < boardSize && board[i][x]?.color === player; i++) {
+        count++;
+      }
+
+      if (checkAndReset()) return true;
+
+      // 向左检查
+      for (let i = x - 1; i >= 0 && board[y][i]?.color === player; i--) {
+        count++;
+      }
+
+      // // 向右检查
+      for (let i = x + 1; i < boardSize && board[y][i]?.color === player; i++) {
+        count++;
+      }
+
+      if (checkAndReset()) return true;
+
+      // 向左上检查
+      for (let i = x - 1, j = y - 1; i >= 0 && j >= 0 && board[j][i]?.color === player; i--, j--) {
+        count++;
+      }
+
+      // 向右下检查
+      for (let i = x + 1, j = y + 1; i < boardSize && j < boardSize && board[j][i]?.color === player; i++, j++) {
+        count++;
+      }
+
+      if (checkAndReset()) return true;
+
+      // 向右上检查
+      for (let i = x + 1, j = y - 1; i < boardSize && j >= 0 && board[j][i]?.color === player; i++, j--) {
+        count++;
+      }
+
+      // 向左下检查
+      for (let i = x - 1, j = y + 1; i >= 0 && j < boardSize && board[j][i]?.color === player; i--, j++) {
+        count++;
+      }
+
+      if (checkAndReset(false)) return true;
+    }
+
+    // 检查三三禁手、四四禁手
+    function checkThreeOrFour(board, x, y, player) {
+      let count = 0; // 同一条线最多跳空一子计数
+      let startEndCount = 0; // 头尾空位计数
+      let emptyCount = 0; // 跳空计数
+      let three = 0; // 三连计数
+      let four = 0; // 四连计数
+      let sideline = 'sideline'; // 边线
+
+      // 检查活三、活四、冲四
+      function traverse(currentPlayer, endPlayer, init, condition, next) {
+        let { i, j } = init;
+
+        while (condition(i, j)) {
+          if (currentPlayer(i, j)?.color === player) {
+            count++;
+            [i, j] = next(i, j);
+          } else if (!currentPlayer(i, j)?.color) { // 空位
+            if (!endPlayer(i, j)?.color || endPlayer(i, j)?.color === sideline) { // 再下一个还是空位
+              startEndCount++;
+              break;
+            } else {
+              emptyCount++;
+              [i, j] = next(i, j);
+              continue;
+            }
+          } else {
+            break;
+          }
+        }
+      }
+
+      // 判断是否形成禁手
+      function check() {
+        if (count >= 4 && emptyCount === 2) { // 单排活四或冲四
+          return true;
+        }
+
+        if (count === 2 && startEndCount === 2 && emptyCount < 2) { // 活三禁手
+          three++;
+        }
+
+        if (count === 3 && (startEndCount === 1 || startEndCount === 2) && emptyCount < 2) { // 四四禁手
+          four++;
+        }
+
+        if (three >= 2 || four >= 2) return true;
+
+        count = 0;
+        startEndCount = 0;
+        emptyCount = 0;
+      }
+
+      // 向上检查
+      traverse(
+        (i) => board[i][x],
+        (i) => i - 1 >= 0 ? board[i - 1][x] : {color: sideline},
+        { i: y - 1 },
+        (i) => i >= 0,
+        (i) => [i - 1]
+      );
+
+      // 向下检查
+      traverse(
+        (i) => board[i][x], 
+        (i) => i + 1 < boardSize ? board[i + 1][x] : {color: sideline}, 
+        { i: y + 1 }, 
+        (i) => i < boardSize, 
+        (i) => [i + 1]
+      );
+
+      if (check()) return true;
+
+      // 向左检查
+      traverse(
+        (i) => board[y][i], 
+        (i) => i - 1 >= 0 ? board[i - 1][x] : {color: sideline}, 
+        { i: x - 1 }, 
+        (i) => i >= 0, 
+        (i) => [i - 1]
+      );
+
+      // 向右检查
+      traverse(
+        (i) => board[y][i], 
+        (i) => i + 1 < boardSize ? board[i + 1][x] : {color: sideline}, 
+        { i: x + 1 }, 
+        (i) => i < boardSize, 
+        (i) => [i + 1]
+      );
+
+      if (check()) return true;
+
+      // 向左上检查
+      traverse(
+        (i, j) => board[j][i], 
+        (i, j) => i - 1 >= 0 && j - 1 >= 0 ? board[j - 1][i - 1] : {color: sideline}, 
+        { i: x - 1, j: y - 1 }, 
+        (i, j) => i >= 0 && j >= 0, 
+        (i, j) => [i - 1, j - 1]
+      );
+
+      // 向右下检查
+      traverse(
+        (i, j) => board[j][i], 
+        (i, j) => i + 1 < boardSize && j + 1 < boardSize ? board[j + 1][i + 1] : {color: sideline}, 
+        { i: x + 1, j: y + 1 }, 
+        (i, j) => i < boardSize && j < boardSize, 
+        (i, j) => [i + 1, j + 1]
+      );
+
+      if (check()) return true;
+
+      // 向右上检查
+      traverse(
+        (i, j) => board[j][i], 
+        (i, j) => i + 1 < boardSize && j - 1 >= 0 ? board[j - 1][i + 1] : {color: sideline}, 
+        { i: x + 1, j: y - 1 }, 
+        (i, j) => i < boardSize && j >= 0, 
+        (i, j) => [i + 1, j - 1]
+      );
+
+      // 向左下检查
+      traverse(
+        (i, j) => board[j][i], 
+        (i, j) => i - 1 >= 0 && j + 1 < boardSize ? board[j + 1][i - 1] : {color: sideline}, 
+        { i: x - 1, j: y + 1 }, 
+        (i, j) => i >= 0 && j < boardSize, 
+        (i, j) => [i - 1, j + 1]
+      );
+
+      if (check()) return true;
+    }
+
+
     // 显示获胜方
-    function openDialog(winner) {
-      document.getElementById('winner').innerText = winner === 'black' ? '黑方获胜' : '白方获胜';
+    function openDialog({ title = '恭喜！', text = '', btnShow = true }) {
+      document.getElementById('title').innerText = title;
+      document.getElementById('winner').innerText = text;
       document.getElementById('dialog').className = 'dialog open';
+      document.getElementById('reBtn').style.display = btnShow ? 'inline-block' : 'none';
     }
 
     // 开始游戏
@@ -379,6 +609,7 @@
       currentStep = 1; // 当前手数
       gameOver = false;
       gameBoard = Array(boardSize).fill().map(() => Array(boardSize).fill(null));
+      deuce = 0;
       lastHoverPoint = null;
       drawBoard();
       drawAxis();
@@ -434,6 +665,11 @@
       let winner;
 
       if (x >= 0 && y >= 0 && x < boardSize && y < boardSize && gameBoard[y][x] === null) {
+        if (currentPlayer.color === 'black' && (checkLongConnect(gameBoard, x, y, currentPlayer.color) || checkThreeOrFour(gameBoard, x, y, currentPlayer.color))) {
+          rejectAudio.play();
+          return;
+        }
+
         if (currentPlayer.step > 0) {
           nctx.clearRect((currentPlayer.x + .5) * cellSize, (currentPlayer.y + .5) * cellSize, cellSize, cellSize);
 
@@ -461,9 +697,17 @@
         if (winner) {
           gameOver = true;
           winAudio.play();
-          openDialog(winner);
+          openDialog({ text: winner === 'black' ? '黑方获胜' : '白方获胜' });
           return;
         }
+
+        // 检测是否和棋
+        if (++deuce === boardSize * boardSize) {
+          gameOver = true;
+          openDialog({ title: '哎呦！', text: '势均力敌' });
+          return;
+        }
+
         // 切换玩家
         currentPlayer.color = currentPlayer.color === 'black' ? 'white' : 'black';
       }
@@ -488,7 +732,13 @@
 
       if (x >= 0 && y >= 0 && x < boardSize && y < boardSize && gameBoard[y][x] === null) {
         clearCanvas(mctx);
-        drawMarkPiece(mctx, x, y, cellSize, currentPlayer.color === 'black' ? 'rgba(0, 0, 0, .3)' : 'rgba(255, 255, 255, .3)');
+
+        if (currentPlayer.color === 'black' && (checkLongConnect(gameBoard, x, y, currentPlayer.color) || checkThreeOrFour(gameBoard, x, y, currentPlayer.color))) {
+          drawNotArrowedMark(mctx, x, y, cellSize, 'red');
+        } else {
+          drawMarkPiece(mctx, x, y, cellSize, currentPlayer.color === 'black' ? 'rgba(0, 0, 0, .3)' : 'rgba(255, 255, 255, .3)');
+        }
+
         lastHoverPoint = { x, y };
       }
     }
