@@ -74,9 +74,9 @@
   <canvas id="game" width="480" height="480"></canvas>
   <div id="dialog" class="dialog" onclick="this.className='dialog'">
     <div class="alert">
-      <h4 id="title">恭喜!</h4>
+      <h4 id="title"></h4>
       <p id="winner"></p>
-      <button onclick="restart()">重新开始</button>
+      <button id="reBtn" onclick="restart()">重新开始</button>
     </div>
   </div>
   <script>
@@ -190,10 +190,216 @@
       }
     }
 
+    /**
+     * 禁手的分类
+     * a.三三禁手（黑棋一子落下同时形成两个活三，此子必须为两个活三共同的构成子）；
+     * b.四四禁手（黑棋一子落下同时形成两个或两个以上的冲四或活四）；
+     * c.长连禁手（黑棋一子落下形成一个或一个以上的长连）。
+     * 构成禁手的基本子力要素
+     * a.活三（本方再走一着可以形成活四的三）；
+     * b.活四（有两个点可以成五的四）；
+     * c.冲四（只有一个点可以成五的四）；
+     * d.长连（在棋盘上的阳线和阴线任意一条线上，形成的5个以上同色棋子不间隔的相连）。
+     */
+
+    // 检查长连禁手
+    function checkLongConnect(board, x, y, player, maxCount = 5) {
+      let count = 0; // 连子计数
+
+      function checkAndReset(reset = true) {
+        if (count >= maxCount) return true
+        reset && (count = 0);
+      }
+
+      // 向上检查
+      for (let i = y - 1; i >= 0 && board[i][x] === player; i--) {
+        count++;
+      }
+
+      // 向下检查
+      for (let i = y + 1; i < boardSize && board[i][x] === player; i++) {
+        count++;
+      }
+
+      if (checkAndReset()) return true;
+
+      // 向左检查
+      for (let i = x - 1; i >= 0 && board[y][i] === player; i--) {
+        count++;
+      }
+
+      // // 向右检查
+      for (let i = x + 1; i < boardSize && board[y][i] === player; i++) {
+        count++;
+      }
+
+      if (checkAndReset()) return true;
+
+      // 向左上检查
+      for (let i = x - 1, j = y - 1; i >= 0 && j >= 0 && board[j][i] === player; i--, j--) {
+        count++;
+      }
+
+      // 向右下检查
+      for (let i = x + 1, j = y + 1; i < boardSize && j < boardSize && board[j][i] === player; i++, j++) {
+        count++;
+      }
+
+      if (checkAndReset()) return true;
+
+      // 向右上检查
+      for (let i = x + 1, j = y - 1; i < boardSize && j >= 0 && board[j][i] === player; i++, j--) {
+        count++;
+      }
+
+      // 向左下检查
+      for (let i = x - 1, j = y + 1; i >= 0 && j < boardSize && board[j][i] === player; i--, j++) {
+        count++;
+      }
+
+      if (checkAndReset(false)) return true;
+    }
+
+    // 检查三三禁手、四四禁手
+    function checkThreeOrFour(board, x, y, player) {
+      let count = 0; // 同一条线最多跳空一子计数
+      let startEndCount = 0; // 头尾空位计数
+      let emptyCount = 0; // 跳空计数
+      let three = 0; // 三连计数
+      let four = 0; // 四连计数
+      let sideline = 'sideline'; // 边线
+
+      // 检查活三、活四、冲四
+      function traverse(currentPlayer, endPlayer, init, condition, next) {
+        let { i, j } = init;
+
+        while (condition(i, j)) {
+          if (currentPlayer(i, j) === player) {
+            count++;
+            [i, j] = next(i, j);
+          } else if (!currentPlayer(i, j)) { // 空位
+            if (!endPlayer(i, j) || endPlayer(i, j) === sideline) { // 再下一个还是空位
+              startEndCount++;
+              break;
+            } else {
+              emptyCount++;
+              [i, j] = next(i, j);
+              continue;
+            }
+          } else {
+            break;
+          }
+        }
+      }
+
+      // 判断是否形成禁手
+      function check() {
+        if (count >= 4 && emptyCount === 2) { // 单排活四或冲四
+          return true;
+        }
+
+        if (count === 2 && startEndCount === 2 && emptyCount < 2) { // 活三禁手
+          three++;
+        }
+
+        if (count === 3 && (startEndCount === 1 || startEndCount === 2) && emptyCount < 2) { // 四四禁手
+          four++;
+        }
+
+        if (three >= 2 || four >= 2) return true;
+
+        count = 0;
+        startEndCount = 0;
+        emptyCount = 0;
+      }
+
+      // 向上检查
+      traverse(
+        (i) => board[i][x],
+        (i) => i - 1 >= 0 ? board[i - 1][x] : sideline,
+        { i: y - 1 },
+        (i) => i >= 0,
+        (i) => [i - 1]
+      );
+
+      // 向下检查
+      traverse(
+        (i) => board[i][x], 
+        (i) => i + 1 < boardSize ? board[i + 1][x] : sideline, 
+        { i: y + 1 }, 
+        (i) => i < boardSize, 
+        (i) => [i + 1]
+      );
+
+      if (check()) return true;
+
+      // 向左检查
+      traverse(
+        (i) => board[y][i], 
+        (i) => i - 1 >= 0 ? board[i - 1][x] : sideline, 
+        { i: x - 1 }, 
+        (i) => i >= 0, 
+        (i) => [i - 1]
+      );
+
+      // 向右检查
+      traverse(
+        (i) => board[y][i], 
+        (i) => i + 1 < boardSize ? board[i + 1][x] : sideline, 
+        { i: x + 1 }, 
+        (i) => i < boardSize, 
+        (i) => [i + 1]
+      );
+
+      if (check()) return true;
+
+      // 向左上检查
+      traverse(
+        (i, j) => board[j][i], 
+        (i, j) => i - 1 >= 0 && j - 1 >= 0 ? board[j - 1][i - 1] : sideline, 
+        { i: x - 1, j: y - 1 }, 
+        (i, j) => i >= 0 && j >= 0, 
+        (i, j) => [i - 1, j - 1]
+      );
+
+      // 向右下检查
+      traverse(
+        (i, j) => board[j][i], 
+        (i, j) => i + 1 < boardSize && j + 1 < boardSize ? board[j + 1][i + 1] : sideline, 
+        { i: x + 1, j: y + 1 }, 
+        (i, j) => i < boardSize && j < boardSize, 
+        (i, j) => [i + 1, j + 1]
+      );
+
+      if (check()) return true;
+
+      // 向右上检查
+      traverse(
+        (i, j) => board[j][i], 
+        (i, j) => i + 1 < boardSize && j - 1 >= 0 ? board[j - 1][i + 1] : sideline, 
+        { i: x + 1, j: y - 1 }, 
+        (i, j) => i < boardSize && j >= 0, 
+        (i, j) => [i + 1, j - 1]
+      );
+
+      // 向左下检查
+      traverse(
+        (i, j) => board[j][i], 
+        (i, j) => i - 1 >= 0 && j + 1 < boardSize ? board[j + 1][i - 1] : sideline, 
+        { i: x - 1, j: y + 1 }, 
+        (i, j) => i >= 0 && j < boardSize, 
+        (i, j) => [i - 1, j + 1]
+      );
+
+      if (check()) return true;
+    }
+
     // 显示获胜方
-    function openDialog(winner) {
-      document.getElementById('winner').innerText = winner === 'black' ? '黑方获胜' : winner === 'white' ? '白方获胜' : '势均力敌';
+    function openDialog({ title = '恭喜！', text = '', btnShow = true }) {
+      document.getElementById('title').innerText = title;
+      document.getElementById('winner').innerText = text;
       document.getElementById('dialog').className = 'dialog open';
+      document.getElementById('reBtn').style.display = btnShow ? 'inline-block' : 'none';
     }
 
     // 开始游戏
@@ -222,6 +428,11 @@
       let winner;
 
       if (x >= 0 && y >= 0 && x < boardSize && y < boardSize && gameBoard[y][x] === null) {
+        if (currentPlayer === 'black' && (checkLongConnect(gameBoard, x, y, currentPlayer) || checkThreeOrFour(gameBoard, x, y, currentPlayer))) {
+          openDialog({ title: '哦豁！', text: '黑方禁手', btnShow: false });
+          return;
+        }
+
         gameBoard[y][x] = currentPlayer;
         drawPiece(x, y, cellSize, currentPlayer === 'black' ? 'black' : 'white');
 
@@ -232,14 +443,14 @@
 
         if (winner) {
           gameOver = true;
-          openDialog(winner);
+          openDialog({ text: winner === 'black' ? '黑方获胜' : '白方获胜' });
           return;
         }
 
         // 检测是否和棋
         if (++draw === boardSize * boardSize) {
           gameOver = true;
-          openDialog();
+          openDialog({ title: '哎呦！', text: '势均力敌' });
           return;
         }
 
